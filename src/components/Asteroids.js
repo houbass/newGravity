@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 
 //THREE FIBER
 import { useFrame } from "@react-three/fiber"
@@ -27,11 +27,14 @@ const Asteroids = ({
         selfGravitation
     }) => {
 
-    const selfGravityTweek = 5;    
+    const selfGravityTweek = 5; 
+    const massRate = 1 * Math.pow(10,24) / 40; 
+    const astElasticity = 0.5;  
 
 
     //RANDOM LOOP
-    const [asteroids, setAsteroids] = useState([]);
+    const [asteroids, setAsteroids] = useState(null);
+    const [newAsteroids, setNewAsteroids] = useState(null);
     const [filteredAsteroids, setFilteredAsteroids] = useState([]);
     const [asteroidWithZeroR, setAsteroidWithZeroR] = useState([]);
     //CUSTOM HOOKS
@@ -63,12 +66,16 @@ const Asteroids = ({
             this.y = ly;
             this.z = asteroidZ;
             this.r = r;
+            this.m = massRate * r;
             this.vx = vX;
             this.vy = vY;
             this.vz = 0;
             this.index = index;
         }
-
+        getF(body1m, body2m, body1v, body2v) {
+            return ((body1m - body2m) / (body1m + body2m)) * body1v + 
+            ((2 * body2m) / (body1m + body2m)) * body2v;
+        }
         update(x, y, z, mb1, rb1, selfGrav, thisAsteroids) {
             //GRAVITATION LOOP
             
@@ -90,7 +97,7 @@ const Asteroids = ({
             const Gzb13 = sinB13z * Gb13 * gAmp;
 
 
-            //POHYB V GRAVITACNIM POLI TELESA 2
+            //POHYB V GRAVITACNIM POLI TELESA 2 (zelene)
             const Lx23 = x - this.x;
             const Ly23 = y - this.y;
             const Lz23 = z - this.z;
@@ -109,10 +116,8 @@ const Asteroids = ({
             
 
             //POHYB OVLIVNEN OSTATNIMA ASTEROIDAMA
-            const massRate = 1 * Math.pow(10,24) / 10;
-            const thisM = massRate * this.r;
-
-            const filteredThisAsteroids = thisAsteroids.filter((item) => item.x != this.x)
+            
+            const filteredThisAsteroids = thisAsteroids.filter((item) => item.index !== this.index)
             let AstX = 0;
             let AstY = 0;
             let AstZ = 0;
@@ -134,7 +139,7 @@ const Asteroids = ({
                     const sinBAstz = sinBFun(LzAst, LAst);
 
                     //vypocet G
-                    const GAst = gravityFun(thisM, LAst);
+                    const GAst = gravityFun(this.m, LAst);
                     const GyAst = sinBAst * GAst * gAmp;
                     const GxAst = cosBAst * GAst * gAmp;
                     const GzAst = sinBAstz * GAst * gAmp;
@@ -154,78 +159,76 @@ const Asteroids = ({
                     AstZ = 0;
                 }
             })
+
+
+            //POHYB PRI KOLIZI S ASTEROIDAMA
+            let crashvX = 0;
+            let crashvY = 0;
+            let crashvZ = 0;
+            
+            filteredThisAsteroids.forEach((item) => {
+
+                const rSum = (item.r + this.r) * rAmp;
+                const lxCheck = item.x - this.x
+                const lyCheck = item.y - this.y
+                const lzCheck = item.z - this.z
+                const Lxycheck = Math.sqrt(Math.pow(lxCheck, 2) + Math.pow(lyCheck, 2));
+                const Lzcheck = Math.sqrt(Math.pow(lzCheck, 2) + Math.pow(Lxycheck, 2));
+                const L = Lzcheck * rAmp;
+                //console.log(L)
+
+                //if Crash
+                if(Math.round(L/1000) === Math.round((rSum/1000))) {
+
+                    //console.log('------------------------')
+                    //console.log(Math.round(L/1000))
+                    //console.log(Math.round((rSum/1000)))
+                    const vfx = this.getF(this.m, item.m, this.vx, item.vx);
+                    const vfy = this.getF(this.m, item.m, this.vy, item.vy);
+                    const vfz = this.getF(this.m, item.m, this.vz, item.vz);
+
+                    crashvX += vfx * astElasticity;
+                    crashvY += vfy * astElasticity;
+                    crashvZ += vfz * astElasticity;
+                }
+
+
+            })
+
+
             //console.log(AstZ)
 
             //Ovlivňování vektoru12 gravitaci
             //this.vx += Gxb13 + Gxb23 + AstX;
             //this.vy += Gyb13 + Gyb23 + AstY;
             //this.vz += Gzb13 + Gzb23 + AstZ;
+            this.vx += Gxb13 + AstX + crashvX;
+            this.vy += Gyb13 + AstY + crashvY;
+            this.vz += Gzb13 + AstZ + crashvZ;
 
-            this.vx += Gxb13 + AstX;
-            this.vy += Gyb13 + AstY;
-            this.vz += Gzb13 + AstZ;
+
+            //crash
+
+
+
             
-
+            // If crash to sun
             if(L13check < rb3 + this.r/2){
                 this.vx = 0;
                 this.vy = 0;
                 this.vz = 0;
-
-            }
-            else if(L23check < rb1 - this.r/4){
-                this.r = 0;
-            }
-
-            else{
-            //hlavní pohyb bodu 1
-
-                //if srazka
-
-                let srazkyX = 0;
-                let srazkyY = 0;
-                let srazkyZ = 0;
-                filteredThisAsteroids.forEach((item) => {
-
-                    const LxAst = item.x - this.x;
-                    const LyAst = item.y - this.y;
-                    const LzAst = item.z - this.z;
-
-                    const LxyAstcheck = Math.sqrt(Math.pow(LxAst, 2) + Math.pow(LyAst, 2));
-                    const LAstcheck = Math.sqrt(Math.pow(LzAst, 2) + Math.pow(LxyAstcheck, 2));
-                    const LAst = LAstcheck * rAmp;
-
-                    //console.log(item)
-                    const sinBAst = sinBFun(LyAst, LAst);
-                    const cosBAst = cosBFun(LxAst, LAst);
-                    const sinBAstz = sinBFun(LzAst, LAst);
-
-                    //vypocet G
-                    const GAst = gravityFun(thisM, LAst);
-                    const GyAst = sinBAst * GAst * gAmp;
-                    const GxAst = cosBAst * GAst * gAmp;
-                    const GzAst = sinBAstz * GAst * gAmp;
-
-                    if(LAstcheck < (item.r + this.r)){
-                        //console.log(item.vx)
-                        srazkyX += item.vx;
-                        srazkyY += item.vy;
-                        srazkyZ += item.vz; 
-
-                    }else{
-
-                    }
-                })
-
-                /*
-                this.x += this.vx + srazkyX
-                this.y += this.vy + srazkyY    
-                this.z += this.vz + srazkyZ
-                */
-
+            } else {
                 this.x += this.vx
                 this.y += this.vy  
                 this.z += this.vz
             };
+
+            return {
+                x: this.x,
+                y: this.y,
+                z: this.z,
+                r: this.r
+            }
 
         }
 
@@ -256,34 +259,63 @@ const Asteroids = ({
         }
         setAsteroids(asteroidHandler);
 
+
     }, [setState])
+
+
+    async function generateData() {
+        const frames = [];
+    
+        for (let i = 0; i < 1000; i++) {
+            const thisFrame = await Promise.all(
+                asteroids.map(agent =>
+                    Promise.resolve(agent.update(xb1, yb1, zb1, mb1, rb1, selfGravitation, asteroids))
+                )
+            );
+            frames.push(thisFrame);
+        }
+    
+        console.log(frames);
+        setNewAsteroids(frames);
+        frameRef.current = 0;
+    }
+    
+    useEffect(() => {
+        if(asteroids) {
+            generateData()
+        }
+    }, [asteroids])
+
+
+    const frameRef = useRef(0);
     
     //ANIMATION
     const [rotationAsteroids, setRotationAsteroids] = useState(0);
     useFrame(() => {
-    //useEffect(() => {    
-        setRotationAsteroids(rotationAsteroids + Math.PI / 3000);
-        //filter asteroids with r=0 for render;
-        setFilteredAsteroids(asteroids.filter((agent) => agent.r !== 0));
-        //filter asteroids with r=0 for planet 1 growing;
-        setAsteroidWithZeroR(asteroids.filter((agent) => agent.r === 0));
-        setPlanet1Growing(asteroidWithZeroR.length);
-        asteroids.forEach((agent, index) => {
-            agent.update(xb1, yb1, zb1, mb1, rb1, selfGravitation, asteroids);
-        });
+        if(newAsteroids) {
+            frameRef.current += 1;
+        }
     });
-    //}, [setState]);
+
 
     return (
         <>
-            <group name="ASTEROIDS" rotation={[0, 0, 0]}>
-                {filteredAsteroids.map((asteroid) => (
-                    <mesh key={randomRange(0, 1000000)} position={[asteroid.x, asteroid.y, asteroid.z]}>
-                        <sphereGeometry args={[asteroid.r, 8, 4]} />
-                        <meshStandardMaterial args={[{ color: 0xa29890 }]} />
-                    </mesh>
-                ))}                
-            </group>        
+            {newAsteroids && newAsteroids[frameRef.current] && (
+                <group name="ASTEROIDS" rotation={[0, 0, 0]}>
+                    {newAsteroids[frameRef.current].map((asteroid) => {
+
+
+                        //console.log(asteroid.x)
+
+                        return(
+                            <mesh key={randomRange(0, 1000000)} position={[asteroid.x, asteroid.y, asteroid.z]}>
+                                <sphereGeometry args={[asteroid.r, 8, 4]} />
+                                <meshStandardMaterial args={[{ color: 0xa29890 }]} />
+                            </mesh>
+                        )
+                    })}                
+                </group>        
+            )}
         </>
     )
 };

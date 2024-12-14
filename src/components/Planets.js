@@ -53,7 +53,7 @@ const Planets = ({
     const [rotationX, setRotationX] = useState(0);
     const [rotation2, setRotation2] = useState(0);
 
-    console.log('yo')
+    //console.log('yo')
 
     useFrame(() => {
 
