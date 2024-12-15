@@ -71,6 +71,12 @@ const Asteroids = ({
             this.vy = vY;
             this.vz = 0;
             this.index = index;
+            this.vxc = 0;
+            this.vyc = 0;
+            this.vzc = 0;
+            this.otherCrashX = 0;
+            this.otherCrashY = 0;
+            this.otherCrashZ = 0;
         }
         getF(body1m, body2m, body1v, body2v) {
             return ((body1m - body2m) / (body1m + body2m)) * body1v + 
@@ -162,38 +168,7 @@ const Asteroids = ({
 
 
             //POHYB PRI KOLIZI S ASTEROIDAMA
-            let crashvX = 0;
-            let crashvY = 0;
-            let crashvZ = 0;
-            
-            filteredThisAsteroids.forEach((item) => {
 
-                const rSum = (item.r + this.r) * rAmp;
-                const lxCheck = item.x - this.x
-                const lyCheck = item.y - this.y
-                const lzCheck = item.z - this.z
-                const Lxycheck = Math.sqrt(Math.pow(lxCheck, 2) + Math.pow(lyCheck, 2));
-                const Lzcheck = Math.sqrt(Math.pow(lzCheck, 2) + Math.pow(Lxycheck, 2));
-                const L = Lzcheck * rAmp;
-                //console.log(L)
-
-                //if Crash
-                if(Math.round(L/1000) === Math.round((rSum/1000))) {
-
-                    //console.log('------------------------')
-                    //console.log(Math.round(L/1000))
-                    //console.log(Math.round((rSum/1000)))
-                    const vfx = this.getF(this.m, item.m, this.vx, item.vx);
-                    const vfy = this.getF(this.m, item.m, this.vy, item.vy);
-                    const vfz = this.getF(this.m, item.m, this.vz, item.vz);
-
-                    crashvX += vfx * astElasticity;
-                    crashvY += vfy * astElasticity;
-                    crashvZ += vfz * astElasticity;
-                }
-
-
-            })
 
 
             //console.log(AstZ)
@@ -202,13 +177,54 @@ const Asteroids = ({
             //this.vx += Gxb13 + Gxb23 + AstX;
             //this.vy += Gyb13 + Gyb23 + AstY;
             //this.vz += Gzb13 + Gzb23 + AstZ;
-            this.vx += Gxb13 + AstX + crashvX;
-            this.vy += Gyb13 + AstY + crashvY;
-            this.vz += Gzb13 + AstZ + crashvZ;
+            this.vx += Gxb13 + AstX;
+            this.vy += Gyb13 + AstY;
+            this.vz += Gzb13 + AstZ;
 
 
             //crash
+            let crashvX = 0;
+            let crashvY = 0;
+            let crashvZ = 0;
+            
+            filteredThisAsteroids.forEach((item) => {
+                const rSum = item.r + this.r;
+                const lxCheck = item.x - this.x;
+                const lyCheck = item.y - this.y;
+                const lzCheck = item.z - this.z;
+                const Lxycheck = Math.sqrt(Math.pow(lxCheck, 2) + Math.pow(lyCheck, 2));
+                const Lzcheck = Math.sqrt(Math.pow(lzCheck, 2) + Math.pow(Lxycheck, 2));
+                const L = Lzcheck;
+        
+                if (L < rSum && !this.isCollision) {        
+                    this.isCollision = true;
+        
+                    // Calculate final velocities for both asteroids
+                    const vfx1 = this.getF(this.m, item.m, this.vx, item.vx);
+                    const vfy1 = this.getF(this.m, item.m, this.vy, item.vy);
+                    const vfz1 = this.getF(this.m, item.m, this.vz, item.vz);
+        
+                    const vfx2 = this.getF(item.m, this.m, item.vx, this.vx);
+                    const vfy2 = this.getF(item.m, this.m, item.vy, this.vy);
+                    const vfz2 = this.getF(item.m, this.m, item.vz, this.vz);
+        
+                    // Apply velocities scaled by elasticity
+                    crashvX = vfx1 * astElasticity;
+                    crashvY = vfy1 * astElasticity;
+                    crashvZ = vfz1 * astElasticity;
 
+                    
+        
+                    item.otherCrashX = (vfx2 * astElasticity) * -1;
+                    item.otherCrashY = (vfy2 * astElasticity) * -1;
+                    item.otherCrashZ = (vfz2 * astElasticity) * -1;
+                }
+        
+                if (L > rSum && this.isCollision) {
+                    this.isCollision = false;
+
+                }
+            });
 
 
             
@@ -218,10 +234,13 @@ const Asteroids = ({
                 this.vy = 0;
                 this.vz = 0;
             } else {
-                this.x += this.vx
-                this.y += this.vy  
-                this.z += this.vz
+                this.x += this.vx + crashvX + this.otherCrashX;
+                this.y += this.vy + crashvY + this.otherCrashY;
+                this.z += this.vz + crashvZ + this.otherCrashZ;
             };
+
+
+
 
             return {
                 x: this.x,
@@ -280,29 +299,36 @@ const Asteroids = ({
         frameRef.current = 0;
     }
     
+    /*
     useEffect(() => {
         if(asteroids) {
             generateData()
         }
     }, [asteroids])
-
+    */
 
     const frameRef = useRef(0);
     
     //ANIMATION
-    const [rotationAsteroids, setRotationAsteroids] = useState(0);
+    const [rotationAsteroids, setRotationAsteroids] = useState(true);
     useFrame(() => {
         if(newAsteroids) {
             frameRef.current += 1;
         }
+        setRotationAsteroids(!rotationAsteroids)
+        asteroids?.forEach(agent =>
+            agent.update(xb1, yb1, zb1, mb1, rb1, selfGravitation, asteroids)
+        )
     });
+
+    //console.log(asteroids)
 
 
     return (
         <>
-            {newAsteroids && newAsteroids[frameRef.current] && (
+            {asteroids && (
                 <group name="ASTEROIDS" rotation={[0, 0, 0]}>
-                    {newAsteroids[frameRef.current].map((asteroid) => {
+                    {asteroids.map((asteroid) => {
 
 
                         //console.log(asteroid.x)
